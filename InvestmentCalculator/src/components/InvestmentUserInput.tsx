@@ -16,6 +16,7 @@ export default function InvestmentUserInput({
     inputProperty = "annualInvestment";
   else if (inputType === "EXPECTED RETURN") inputProperty = "expectedReturn";
   else if (inputType === "DURATION") inputProperty = "duration";
+
   return (
     <>
       <section>
