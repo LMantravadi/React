@@ -1,7 +1,28 @@
+// {
+//   "files": [],
+//   "references": [
+//     { "path": "./tsconfig.app.json" },
+//     { "path": "./tsconfig.node.json" }
+//   ]
+// }
+
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
+  "compilerOptions": {
+    "outDir": "./build",
+    "target": "ES6",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",          // Make sure the JSX setting is correct for React 17 and above
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",      // Exclude node_modules
+    "dist",              // Exclude dist folder
+    "tests",             // Exclude test folder
+    "**/*.test.ts",      // Exclude all test files
+    "src/components/demo/*"         // Exclude specific temp folder inside src
   ]
 }

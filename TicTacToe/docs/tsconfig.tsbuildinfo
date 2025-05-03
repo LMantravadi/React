@@ -1,0 +1,1 @@
+{"root":["../src/app.tsx","../src/babel.config.ts","../src/jest.config.ts","../src/main.tsx","../src/vite-env.d.ts","../src/assets/gameprototypes.ts","../src/assets/winning_combinations.ts","../src/components/gameover.test.tsx","../src/components/gameover.tsx","../src/components/gameboard.tsx","../src/components/log.tsx","../src/components/player.tsx"],"version":"5.6.3"}
