@@ -1,0 +1,335 @@
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
+
+import { useEffect, useState, type FormEvent } from "react";
+import api from "../utils/api";
+import type { Property } from "../utils/hoa_types";
+
+interface Props {
+  selectedPropertyId: number | null;
+  onSave(): void;
+}
+export default function PropertyForm({ selectedPropertyId, onSave }: Props) {
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [currentProperty, setCurrentProperty] = useState<Property | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const getPropertyById = async (id: number | null) => {
+    if (id) {
+      const response = await api.get(`/properties/${id}`);
+      return response.data;
+    } else throw new Error("Select a property");
+  };
+
+  const {
+    data,
+    error: fetchDataError,
+    isLoading,
+    isError: isFetchError,
+  } = useQuery<Property>({
+    queryKey: ["property", selectedPropertyId],
+    queryFn: () => getPropertyById(selectedPropertyId),
+    enabled: !!selectedPropertyId,
+  });
+
+  const createOrEditProperty = async (): Promise<Property> => {
+    const { id, ...body } = currentProperty!;
+    const response = isEditMode
+      ? await api.put(`/properties/${selectedPropertyId}`, body)
+      : await api.post(`/properties`, body);
+    return response.data;
+  };
+  const {
+    mutate: createOrEditMutate,
+    isPending: isSaving,
+    isError: isSaveError,
+    error: saveError,
+  } = useMutation({
+    mutationFn: createOrEditProperty,
+    onSuccess: (createdProperty: Property) => {
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
+      onSave();
+      //   setCurrentProperty(createdProperty);
+      //   navigate("/properties");
+    },
+  });
+
+  useEffect(() => {
+    setIsEditMode(!!selectedPropertyId);
+    if (data) {
+      //edit mode
+      setCurrentProperty(data);
+    } else if (selectedPropertyId === null) {
+      // create mode
+      const newProperty: Property = {
+        id: 0,
+        name: "",
+        address: "",
+        city: "",
+        currency: "",
+      };
+      setCurrentProperty(newProperty);
+    }
+  }, [selectedPropertyId, data]);
+
+  function handleChange(key: keyof Property, value: string) {
+    if (!currentProperty) return;
+    setCurrentProperty({ ...currentProperty, [key]: value });
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    createOrEditMutate();
+  }
+
+  if (isLoading) return <p>Loading form…</p>;
+  if (isFetchError)
+    return <p style={{ color: "red" }}>{(fetchDataError as Error).message}</p>;
+  if (!currentProperty) return null;
+  return (
+    <>
+      <form onSubmit={(e) => handleSubmit(e)}>
+        <fieldset disabled={isSaving}>
+          <h1>Property Form</h1>
+          <label htmlFor="propertyName">Name: </label>
+          <input
+            id="propertyName"
+            disabled={isLoading}
+            value={currentProperty?.name ?? ""}
+            onChange={(e) => handleChange("name", e.target.value)}
+          />
+          <label htmlFor="propertyAddress">Address: </label>
+          <input
+            id="propertyAddress"
+            disabled={isLoading}
+            value={currentProperty?.address ?? ""}
+            onChange={(e) => handleChange("address", e.target.value)}
+          />
+          <label htmlFor="propertyCity">City: </label>
+          <input
+            id="propertyCity"
+            disabled={isLoading}
+            value={currentProperty?.city ?? ""}
+            onChange={(e) => handleChange("city", e.target.value)}
+          />
+          <label htmlFor="propertyCurrency">Currency: </label>
+          <input
+            id="propertyCurrency"
+            disabled={isLoading}
+            type="number"
+            value={currentProperty?.currency ?? ""}
+            onChange={(e) => handleChange("currency", e.target.value)}
+          />
+          {isSaveError && (
+            <p style={{ color: "red" }}>{(saveError as Error).message}</p>
+          )}
+          <button type="submit" disabled={isSaving}>
+            {isEditMode ? "Update" : "Create"} Property
+          </button>
+        </fieldset>
+      </form>
+    </>
+  );
+}
+
+---------------------------------
+
+
+import type { CSSProperties, ReactNode } from "react";
+import ReactDOM from "react-dom";
+
+interface ModalProps {
+  onClose: () => void;
+  children: ReactNode;
+}
+
+export default function Modal({ onClose, children }: ModalProps) {
+  const modalStyles: CSSProperties = {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+  const dialogStyles: CSSProperties = {
+    background: "white",
+    padding: "1rem",
+    borderRadius: "8px",
+    minWidth: "300px",
+  };
+  return ReactDOM.createPortal(
+    <div style={modalStyles} onClick={onClose}>
+      <div style={dialogStyles} onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} style={{ float: "right" }}></button>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+---------------------
+
+import api from "../utils/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Property } from "../utils/hoa_types";
+import { useState } from "react";
+
+import PropertyForm from "./PropertyForm";
+import Modal from "../components/Modal";
+
+export default function PropertyList() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(
+    null
+  );
+  const queryClient = useQueryClient();
+
+  // #region Get Properties from Database
+  const getProperties = async () => {
+    const response = await api.get("/properties");
+    return response.data;
+  };
+  const {
+    data: properties = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery<Property[]>({
+    queryKey: ["properties"],
+    queryFn: getProperties,
+  });
+  // #endregion Get Properties from Database
+
+  // #region delete property from Database
+  const deleteMutationFn = async (id: number) => {
+    await api.delete(`properties/${id}`);
+  };
+  const { mutate: deleteMutate } = useMutation({
+    mutationFn: deleteMutationFn,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["properties"] }),
+  });
+
+  function handleDeletePropery(propertyId: number) {
+    if (!confirm("Delete this property?")) return;
+    deleteMutate(propertyId);
+  }
+  // #endregion delete property from Database
+
+  function handleAddProperty() {
+    setSelectedPropertyId(null);
+    setIsModalOpen(true);
+  }
+  function handleEditProperty(id: number) {
+    setSelectedPropertyId(id);
+    setIsModalOpen(true);
+  }
+  return (
+    <div>
+      <h1>Properties</h1>
+      {isLoading && <p>Loading Properties...</p>}
+      {isError && (
+        <p style={{ color: "red" }}>Error: {(error as Error).message}</p>
+      )}
+
+      <button id="addPropertyButton" onClick={handleAddProperty}>
+        Add Property
+      </button>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Address</th>
+            <th>City</th>
+            <th>Currency</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {properties?.map((property: Property) => (
+            <tr key={property.id}>
+              <td>{property.name}</td>
+              <td>{property.address}</td>
+              <td>{property.city}</td>
+              <td>{property.currency}</td>
+              <td>
+                <button
+                  id="editProperty"
+                  onClick={() => handleEditProperty(property.id)}
+                >
+                  Edit
+                </button>
+              </td>
+              <td>
+                <button
+                  id="deleteProperty"
+                  onClick={() => handleDeletePropery(property.id)}
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {isModalOpen && (
+        <Modal onClose={() => setIsModalOpen(false)}>
+          <PropertyForm
+            selectedPropertyId={selectedPropertyId}
+            onSave={() => setIsModalOpen(false)}
+          />
+        </Modal>
+      )}
+      {/* <ReactModal
+        isOpen={isModalOpen}
+        onRequestClose={() => setIsModalOpen(false)}
+      >
+        <PropertyForm
+          propertyId={selectedPropertyId}
+          onSave={setIsModalOpen(false)}
+        />
+      </ReactModal> */}
+    </div>
+  );
+}
+---------------------
+
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Modal from "react-modal";
+
+const queryClient = new QueryClient();
+Modal.setAppElement("#root");
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>
+);
+---------------------
+
+
+import PropertyList from "./pages/PropertyList";
+
+export default function App() {
+  return (
+    <div>
+      <PropertyList />
+    </div>
+  );
+}
+
+---------------------
